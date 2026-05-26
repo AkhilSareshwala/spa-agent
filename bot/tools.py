@@ -221,6 +221,32 @@ async def create_booking(
     )
 
 
+async def get_booking_details(
+    params: FunctionCallParams,
+    booking_id: str,
+):
+    """Return booking details for a booking ID."""
+    booking = await db_get_booking(booking_id)
+    if not booking:
+        await params.result_callback(f"Booking '{booking_id}' not found.")
+        return
+
+    start = booking.get("start")
+    end = booking.get("end")
+    try:
+        start_dt = datetime.fromisoformat(start)
+        display_start = start_dt.astimezone(SPA_TZ).strftime("%A %b %d at %I:%M %p")
+    except Exception:
+        display_start = start or "unknown"
+
+    await params.result_callback(
+        f"Booking {booking_id}: {booking.get('service_name') or booking.get('service_id', '')} "
+        f"for {booking.get('client_name', 'Unknown')} on {display_start}. "
+        f"Therapist: {booking.get('therapist_name', 'any')}. "
+        f"Contact: {booking.get('client_contact', 'unknown')}."
+    )
+
+
 async def add_addon_to_booking(
     params: FunctionCallParams,
     booking_id: str,

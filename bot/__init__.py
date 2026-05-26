@@ -38,7 +38,8 @@ from .config import (
 from .prompt import build_system_prompt
 from .tools import (
     check_availability, create_booking, add_addon_to_booking,
-    reschedule_booking, cancel_booking, get_upsell_suggestion,
+    get_booking_details, reschedule_booking, cancel_booking,
+    get_upsell_suggestion,
 )
 
 
@@ -109,6 +110,7 @@ def make_llm(system_prompt: str) -> GoogleLLMService:
     llm.register_direct_function(check_availability)
     llm.register_direct_function(create_booking)
     llm.register_direct_function(add_addon_to_booking)
+    llm.register_direct_function(get_booking_details)
     llm.register_direct_function(reschedule_booking)
     llm.register_direct_function(cancel_booking)
     llm.register_direct_function(get_upsell_suggestion, cancel_on_interruption=False)

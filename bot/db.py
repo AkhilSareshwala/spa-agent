@@ -6,6 +6,7 @@ from loguru import logger
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from .config import MONGODB_URI, SPA_TZ
+from .calendar import get_calendar_service, cal_find_event, parse_google_dt
 
 # ── Connection singleton ──────────────────────────────────────────────────────
 _mongo_client = None
@@ -71,8 +72,86 @@ async def db_save_booking(booking: dict):
     await get_db().bookings.insert_one(doc)
 
 
+def normalize_booking_id(raw: str) -> str:
+    if not raw or not isinstance(raw, str):
+        return ""
+    cleaned = raw.strip().upper()
+    cleaned = cleaned.replace(" ", "")
+    cleaned = cleaned.rstrip(".",)
+    if cleaned.startswith("SPA") and len(cleaned) >= 14:
+        return cleaned
+    return ""
+
+
 async def db_get_booking(booking_id: str) -> dict | None:
-    return await get_db().bookings.find_one({"booking_id": booking_id})
+    booking_id = normalize_booking_id(booking_id)
+    if not booking_id:
+        return None
+    # Primary: try MongoDB
+    doc = await get_db().bookings.find_one({"booking_id": booking_id})
+    if doc:
+        return doc
+
+    # Fallback: try Google Calendar event with private extended property booking_id
+    try:
+        gcal = get_calendar_service()
+        if not gcal:
+            return None
+        ev = await cal_find_event(gcal, booking_id)
+        if not ev:
+            return None
+
+        # Extract start/end (could be dateTime or date)
+        start_raw = ev.get("start", {}).get("dateTime") or ev.get("start", {}).get("date")
+        end_raw = ev.get("end", {}).get("dateTime") or ev.get("end", {}).get("date")
+
+        # Parse Google datetimes to local SPA_TZ ISO strings when possible
+        try:
+            start_iso = parse_google_dt(start_raw).astimezone(SPA_TZ).isoformat()
+        except Exception:
+            start_iso = start_raw
+        try:
+            end_iso = parse_google_dt(end_raw).astimezone(SPA_TZ).isoformat()
+        except Exception:
+            end_iso = end_raw
+
+        priv = ev.get("extendedProperties", {}).get("private", {})
+        desc = ev.get("description", "") or ""
+
+        booking = {
+            "booking_id": booking_id,
+            "client_name": None,
+            "client_contact": priv.get("client_contact") or "",
+            "service_id": priv.get("service_id"),
+            "service_name": None,
+            "therapist_id": priv.get("therapist_id"),
+            "therapist_name": None,
+            "start": start_iso,
+            "end": end_iso,
+            "addon_ids": priv.get("addon_ids", "").split(",") if priv.get("addon_ids") else [],
+            "addon_names": [],
+            "total_price": int(priv.get("total_price")) if priv.get("total_price") else 0,
+            "status": "confirmed",
+        }
+
+        # Try to pull client name / contact / service from description or summary
+        for line in desc.splitlines():
+            if line.strip().startswith("Client:") and not booking["client_name"]:
+                booking["client_name"] = line.split("Client:", 1)[1].strip()
+            if line.strip().startswith("Contact:") and not booking["client_contact"]:
+                booking["client_contact"] = line.split("Contact:", 1)[1].strip()
+
+        summary = ev.get("summary", "") or ""
+        if "—" in summary:
+            parts = summary.split("—", 1)
+            if not booking["service_name"]:
+                booking["service_name"] = parts[0].strip()
+            if not booking["client_name"] and len(parts) > 1:
+                booking["client_name"] = parts[1].strip()
+
+        return booking
+    except Exception:
+        return None
 
 
 async def db_update_booking(booking_id: str, update: dict):
