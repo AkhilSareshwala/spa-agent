@@ -160,6 +160,17 @@ async def db_update_booking(booking_id: str, update: dict):
     )
 
 
+async def db_get_therapist_bookings(therapist_id: str, date_iso: str) -> list[dict]:
+    bookings = []
+    query = {
+        "therapist_id": therapist_id,
+        "start": {"$regex": f"^{date_iso}"},
+    }
+    async for doc in get_db().bookings.find(query):
+        bookings.append(doc)
+    return bookings
+
+
 async def db_delete_booking(booking_id: str):
     await get_db().bookings.delete_one({"booking_id": booking_id})
 

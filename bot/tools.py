@@ -11,10 +11,11 @@ from .config import SPA_TZ, SPA_OPEN_HOUR, SPA_CLOSE_HOUR, UPSELL_MAP
 from .db import (
     db_get_service, db_get_therapist, db_get_addon,
     db_addon_totals, db_addon_names,
+    db_get_therapist_bookings,
     db_save_booking, db_get_booking, db_update_booking, db_delete_booking,
 )
 from .calendar import (
-    get_calendar_service, cal_get_free_slots,
+    get_calendar_service,
     cal_insert_event, cal_find_event, cal_update_event, cal_delete_event,
     parse_google_dt,
 )
@@ -78,26 +79,73 @@ async def check_availability(
         await params.result_callback(f"No therapist available for '{service_id}'.")
         return
 
-    gcal = get_calendar_service()
-    if not gcal:
-        await params.result_callback(
-            f"Mock slots with {therapist['name']} on {date_iso} (calendar offline): "
-            "9:00 AM, 10:00 AM, 11:00 AM, 2:00 PM, 3:00 PM, 4:00 PM"
-        )
-        return
+    bookings = await db_get_therapist_bookings(therapist["id"], date_iso)
+    busy_intervals = []
+    for booking in bookings:
+        try:
+            start = datetime.fromisoformat(booking["start"])
+            if start.tzinfo is None:
+                start = start.replace(tzinfo=SPA_TZ)
+            end = datetime.fromisoformat(booking["end"])
+            if end.tzinfo is None:
+                end = end.replace(tzinfo=SPA_TZ)
+            busy_intervals.append((start, end))
+        except Exception:
+            continue
 
-    try:
-        free_slots = await cal_get_free_slots(
-            gcal, svc["duration"], date_iso, SPA_OPEN_HOUR, SPA_CLOSE_HOUR
+    day_start = datetime.fromisoformat(f"{date_iso}T{SPA_OPEN_HOUR:02}:00:00")
+    if day_start.tzinfo is None:
+        day_start = day_start.replace(tzinfo=SPA_TZ)
+    day_end = datetime.fromisoformat(f"{date_iso}T{SPA_CLOSE_HOUR:02}:00:00")
+    if day_end.tzinfo is None:
+        day_end = day_end.replace(tzinfo=SPA_TZ)
+
+    busy_intervals.sort(key=lambda x: x[0])
+    merged_busy = []
+    for start, end in busy_intervals:
+        if not merged_busy or start > merged_busy[-1][1]:
+            merged_busy.append((start, end))
+        else:
+            merged_busy[-1] = (merged_busy[-1][0], max(merged_busy[-1][1], end))
+
+    def format_half_hour(dt: datetime) -> str:
+        return dt.strftime("%I:%M %p").lstrip("0")
+
+    free_intervals = []
+    current = day_start
+    for busy_start, busy_end in merged_busy:
+        if busy_end <= current:
+            continue
+        if busy_start > current:
+            if (busy_start - current).total_seconds() >= svc["duration"] * 60:
+                free_intervals.append((current, busy_start))
+        current = max(current, busy_end)
+    if current < day_end and (day_end - current).total_seconds() >= svc["duration"] * 60:
+        free_intervals.append((current, day_end))
+
+    if free_intervals:
+        free_text = ", ".join(
+            f"{format_half_hour(start)} to {format_half_hour(end)}"
+            for start, end in free_intervals
         )
-        slots_str = ", ".join(free_slots[:8]) if free_slots else "No slots available."
-        logger.info(f"[check_availability] {date_iso} {therapist['name']}: {slots_str}")
-        await params.result_callback(
-            f"Available slots with {therapist['name']} on {date_iso}: {slots_str}"
+    else:
+        free_text = "No available intervals."
+
+    busy_text = ""
+    if merged_busy:
+        busy_text = " Booked: " + ", ".join(
+            f"{format_half_hour(start)} to {format_half_hour(end)}"
+            for start, end in merged_busy
         )
-    except Exception as e:
-        logger.error(f"Calendar freebusy error: {e}")
-        await params.result_callback(f"Calendar error: {e}")
+
+    response = (
+        f"Available with {therapist['name']} on {date_iso}: {free_text}." + busy_text
+        if free_intervals else
+        f"No available intervals with {therapist['name']} on {date_iso}." + busy_text
+    )
+
+    logger.info(f"[check_availability] {date_iso} {therapist['name']}: {response}")
+    await params.result_callback(response)
 
 
 async def create_booking(
@@ -158,6 +206,13 @@ async def create_booking(
 
     end_local = start_local + timedelta(minutes=total_mins)
 
+    gcal = get_calendar_service()
+    if not gcal:
+        await params.result_callback(
+            "I'm sorry, I am not able to connect to the calendar right now. Please try again later."
+        )
+        return
+
     cal_body = {
         "summary": f"{svc['name']} — {client_name}",
         "description": (
@@ -196,21 +251,17 @@ async def create_booking(
         "status":         "confirmed",
     }
 
-    async def _save_mongo():
+    try:
         await db_save_booking(booking_doc)
-        logger.info(f"✅ Booking saved to MongoDB: {bid}")
-
-    async def _save_calendar():
-        gcal = get_calendar_service()
-        if not gcal:
-            return
-        try:
-            await cal_insert_event(gcal, cal_body)
-            logger.info(f"✅ Booking saved to Google Calendar: {bid}")
-        except Exception as e:
-            logger.error(f"Calendar insert failed: {e}")
-
-    await asyncio.gather(_save_mongo(), _save_calendar())
+        await cal_insert_event(gcal, cal_body)
+        logger.info(f"✅ Booking saved to MongoDB and Google Calendar: {bid}")
+    except Exception as e:
+        logger.error(f"Booking save failed: {e}")
+        await db_delete_booking(bid)
+        await params.result_callback(
+            "I'm sorry, I am not able to connect to the calendar right now. Please try again later."
+        )
+        return
 
     display = start_local.astimezone(SPA_TZ).strftime("%A %b %d at %I:%M %p")
     await params.result_callback(
@@ -283,14 +334,18 @@ async def add_addon_to_booking(
         old_end = datetime.fromisoformat(booking["end"])
         mongo_update["end"] = (old_end + timedelta(minutes=addon["extra_min"])).isoformat()
 
+    gcal = get_calendar_service()
+    if not gcal:
+        await params.result_callback(
+            "I'm sorry, I am not able to connect to the calendar right now. Please try again later."
+        )
+        return
+
     async def _addon_mongo():
         await db_update_booking(booking_id, mongo_update)
         logger.info(f"✅ Addon '{addon_id}' added to {booking_id} in MongoDB")
 
     async def _addon_calendar():
-        gcal = get_calendar_service()
-        if not gcal:
-            return
         try:
             ev = await cal_find_event(gcal, booking_id)
             if not ev:
@@ -368,6 +423,18 @@ async def reschedule_booking(
     duration  = old_end - old_start
     new_end   = ns + duration
 
+    gcal = get_calendar_service()
+    if not gcal:
+        await params.result_callback(
+            "I'm sorry, I am not able to connect to the calendar right now. Please try again later."
+        )
+        return
+
+    ev = await cal_find_event(gcal, booking_id)
+    if not ev:
+        await params.result_callback(f"Booking '{booking_id}' not found in the calendar.")
+        return
+
     async def _reschedule_mongo():
         await db_update_booking(booking_id, {
             "start": ns.isoformat(),
@@ -376,22 +443,22 @@ async def reschedule_booking(
         logger.info(f"✅ Booking {booking_id} rescheduled in MongoDB")
 
     async def _reschedule_calendar():
-        gcal = get_calendar_service()
-        if not gcal:
-            return
         try:
-            ev = await cal_find_event(gcal, booking_id)
-            if not ev:
-                logger.warning(f"Booking {booking_id} not found in Google Calendar for reschedule")
-                return
             ev["start"]["dateTime"] = ns.isoformat()
             ev["end"]["dateTime"]   = new_end.isoformat()
             await cal_update_event(gcal, ev["id"], ev)
             logger.info(f"✅ Booking {booking_id} rescheduled in Google Calendar")
         except Exception as e:
             logger.error(f"Reschedule calendar error: {e}")
+            raise
 
-    await asyncio.gather(_reschedule_mongo(), _reschedule_calendar())
+    try:
+        await asyncio.gather(_reschedule_mongo(), _reschedule_calendar())
+    except Exception:
+        await params.result_callback(
+            "I'm sorry, I am not able to connect to the calendar right now. Please try again later."
+        )
+        return
 
     await params.result_callback(
         f"Booking {booking_id} rescheduled to "
@@ -412,14 +479,18 @@ async def cancel_booking(params: FunctionCallParams, booking_id: str):
         )
         return
 
+    gcal = get_calendar_service()
+    if not gcal:
+        await params.result_callback(
+            "I'm sorry, I am not able to connect to the calendar right now. Please try again later."
+        )
+        return
+
     async def _cancel_mongo():
         await db_delete_booking(booking_id)
         logger.info(f"✅ Booking {booking_id} deleted from MongoDB")
 
     async def _cancel_calendar():
-        gcal = get_calendar_service()
-        if not gcal:
-            return
         try:
             ev = await cal_find_event(gcal, booking_id)
             if ev:

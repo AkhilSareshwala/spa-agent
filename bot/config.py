@@ -17,10 +17,11 @@ SPA_OPEN_HOUR  = 9
 SPA_CLOSE_HOUR = 20
 
 # ── API keys ──────────────────────────────────────────────────────────────────
-DEEPGRAM_API_KEY  = os.getenv("DEEPGRAM_API_KEY")
+DEEPGRAM_API_KEY   = os.getenv("DEEPGRAM_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
-GOOGLE_API_KEY    = os.getenv("GOOGLE_API_KEY")
-MONGODB_URI       = os.getenv("MONGODB_URI")
+CARTESIA_API_KEY   = os.getenv("CARTESIA_API_KEY")
+GOOGLE_API_KEY     = os.getenv("GOOGLE_API_KEY")
+MONGODB_URI        = os.getenv("MONGODB_URI")
 GOOGLE_CALENDAR_ID          = os.getenv("GOOGLE_CALENDAR_ID", "primary")
 GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
 

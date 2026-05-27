@@ -66,7 +66,7 @@ STRICT TOOL RULES:
 - NEVER call create_booking again to change an existing booking.
 - If the caller says "yes", "okay", or repeats service details, still ask for name/contact.
 - For addon_ids, always pass a JSON array: [] or ["aroma"]. NEVER pass a string.
-- If the calendar is offline, explain that available slots are suggested but cannot be confirmed now.
+- If the calendar is offline, tell the caller you are not able to connect right now and cannot complete that request.
 
 TOOL USAGE GUIDELINES:
 - check_availability: use only when checking date/time availability.

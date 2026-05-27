@@ -1,4 +1,4 @@
-pipecat-ai[silero,deepgram,elevenlabs,sarvam,groq,google,openai]
+pipecat-ai[silero,deepgram,elevenlabs,cartesia,sarvam,groq,google,openai]
 pipecat-ai-subagents
 motor
 openai>=1.0.0

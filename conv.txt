@@ -1,0 +1,65 @@
+Live Transcript
+Luna
+Hello! I'm Luna, your virtual receptionist at Serenity Spa. How may I help you today?
+You
+I wanted to book an appointment for hot
+You
+massage on May 29.
+Luna
+We have openings for the Hot Stone Massage with Sophie on May 29, from 9:00 AM to 8:00 PM. What time would you prefer?
+You
+There any other, therapist
+Luna
+Yes, Sophie is available for the Hot Stone Massage on May 29th from 9:00 AM to 8:00 PM. Would you like to book with her, or would you prefer a different date?
+You
+Different therapist.
+Luna
+Currently, Sophie is the only therapist available for the Hot Stone Massage on May 29th.
+You
+Okay. Go for 9AM.
+Luna
+May I have your full name please?
+You
+My name is Jonathan Iceberg.
+Luna
+And your phone number or email?
+You
+Email is polkartanitiz@derend.com.
+Luna
+Your Hot Stone Massage with Sophie on Friday, May 29th at 9:00 AM is confirmed. The total is 3500 rupees. Would you like to add our Aromatherapy Oil for just 500
+You
+Yes. Add that.
+Luna
+Aromatherapy Oil has been added to your booking. Your new total is 4000 rupees.
+You
+Okay. Thank you.
+Luna
+You're welcome! Enjoy your massage at Serenity Spa.
+You
+Hi, Luna.
+You
+I wanted to book an appointment for hot stone massage on May 29.
+Luna
+We have openings for the Hot Stone Massage with Sophie on May 29, from 10:15 AM to 8:00 PM. What time would you prefer?
+You
+I would like to
+You
+go for
+Luna
+What time
+You
+Carlos.
+Luna
+Carlos is available for the Hot Stone Massage on May 29th from 9:00 AM to 3:00 PM, and again from 4:15
+You
+Okay. Book for 9AM.
+Luna
+May I have your full name please?
+You
+My name is Jonathan Iceberg.
+You
+My email ID is j@directGmail.com. Also, add the add ons.
+Luna
+Your Hot Stone Massage with Carlos on Friday, May 29th at 9:00 AM is confirmed. The total is 3500 rupees. Would you like to add our Aromatherapy Oil for just 500 more?
+You
+Yes. Add that.

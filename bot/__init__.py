@@ -24,6 +24,7 @@ from pipecat.adapters.schemas.tools_schema import ToolsSchema
 from pipecat.processors.frame_processor import FrameProcessor, FrameDirection
 from pipecat.services.deepgram.stt import DeepgramSTTService
 from pipecat.services.google.llm import GoogleLLMService
+from pipecat.services.cartesia.tts import CartesiaTTSService
 from pipecat.services.elevenlabs.tts import ElevenLabsTTSService
 from pipecat.services.tts_service import TextAggregationMode
 from pipecat.transcriptions.language import Language
@@ -33,7 +34,7 @@ from pipecat.utils.text.base_text_filter import BaseTextFilter
 
 from .config import (
     AGENT_NAME, SPA_NAME,
-    DEEPGRAM_API_KEY, ELEVENLABS_API_KEY, GOOGLE_API_KEY,
+    DEEPGRAM_API_KEY, ELEVENLABS_API_KEY, CARTESIA_API_KEY, GOOGLE_API_KEY,
 )
 from .prompt import build_system_prompt
 from .tools import (
@@ -89,15 +90,24 @@ def make_stt():
     )
 
 def make_tts():
-    return ElevenLabsTTSService(
-        api_key=ELEVENLABS_API_KEY,
-        voice_id="EXAVITQu4vr4xnSDxMaL",   # Sarah — warm, professional
-        model="eleven_turbo_v2_5",
-        sample_rate=24000,
+    # return ElevenLabsTTSService(
+    #     api_key=ELEVENLABS_API_KEY,
+    #     voice_id="EXAVITQu4vr4xnSDxMaL",   # Sarah — warm, professional
+    #     model="eleven_turbo_v2_5",
+    #     sample_rate=24000,
+    #     text_aggregation_mode=TextAggregationMode.SENTENCE,
+    #     text_filters=[MarkdownTextFilter(), SpaTextFilter()],
+    # )
+    return CartesiaTTSService(
+        api_key=CARTESIA_API_KEY,
+        voice_id="cbaf8084-f009-4838-a096-07ee2e6612b1",  # Maya (Warm, professional receptionist)
         text_aggregation_mode=TextAggregationMode.SENTENCE,
         text_filters=[MarkdownTextFilter(), SpaTextFilter()],
+        settings=CartesiaTTSService.Settings(
+            model="sonic-3.5",                           # Best low-latency English model
+            language=Language.EN,                        # Explicitly set English
+        ),
     )
-
 def make_llm(system_prompt: str) -> GoogleLLMService:
     llm = GoogleLLMService(
         api_key=GOOGLE_API_KEY,
